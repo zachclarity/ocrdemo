@@ -1,4 +1,5 @@
 
+"use client"
 import OCRFormReader from "./ocr-app";
 
 export default function Home() {
