@@ -1,0 +1,2 @@
+npm install tesseract.js @radix-ui/react-alert-dialog @radix-ui/react-slot class-variance-authority clsx tailwindcss-animate lucide-react
+npm install -D tailwindcss postcss autoprefixer
