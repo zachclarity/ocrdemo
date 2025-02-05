@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { Upload, Camera, Save } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Container, Paper, Typography, TextField, Button, Box, Alert, CircularProgress, Stack
+} from '@mui/material';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import SaveIcon from '@mui/icons-material/Save';
+import { createWorker } from 'tesseract.js';
 
 const OCRFormReader = () => {
   const [imageUrl, setImageUrl] = useState(null);
@@ -14,6 +17,32 @@ const OCRFormReader = () => {
     address: '',
     dateOfBirth: ''
   });
+
+  const extractFields = (text) => {
+    const fields = {
+      name: text.match(/name[:\s]+([^\n]+)/i)?.[1]?.trim() || '',
+      email: text.match(/email[:\s]+([^\n]+)/i)?.[1]?.trim() || '',
+      phone: text.match(/phone[:\s]+([^\n]+)/i)?.[1]?.trim() || '',
+      address: text.match(/address[:\s]+([^\n]+)/i)?.[1]?.trim() || '',
+      dateOfBirth: text.match(/date of birth[:\s]+([^\n]+)/i)?.[1]?.trim() || ''
+    };
+
+    // Clean extracted data
+    if (fields.email) {
+      fields.email = fields.email.toLowerCase().replace(/\s/g, '');
+    }
+    if (fields.phone) {
+      fields.phone = fields.phone.replace(/[^\d-]/g, '');
+    }
+    if (fields.dateOfBirth) {
+      const date = new Date(fields.dateOfBirth);
+      if (!isNaN(date.getTime())) {
+        fields.dateOfBirth = date.toISOString().split('T')[0];
+      }
+    }
+
+    return fields;
+  };
 
   const handleImageUpload = (event) => {
     const file = event.target.files[0];
@@ -30,30 +59,22 @@ const OCRFormReader = () => {
   const performOCR = async (imageData) => {
     setIsProcessing(true);
     setError('');
+    const worker = await createWorker();
+
     try {
-      // Simulated OCR processing with field detection
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await worker.loadLanguage('eng');
+      await worker.initialize('eng');
       
-      // In real implementation, use Tesseract.js:
-      // const worker = await createWorker();
-      // await worker.loadLanguage('eng');
-      // await worker.initialize('eng');
-      // const { data: { text } } = await worker.recognize(imageData);
+      const { data: { text } } = await worker.recognize(imageData);
+      console.log('Extracted text:', text); // For debugging
       
-      // Example form field detection logic
-      const extractedData = {
-        name: 'John Doe', // In real app, use regex or ML to detect fields
-        email: 'john@example.com',
-        phone: '123-456-7890',
-        address: '123 Main St',
-        dateOfBirth: '1990-01-01'
-      };
-      
+      const extractedData = extractFields(text);
       setFormData(extractedData);
     } catch (err) {
-      setError('Error processing form. Please try again.');
+      setError('Error processing form: ' + err.message);
       console.error('OCR Error:', err);
     } finally {
+      await worker.terminate();
       setIsProcessing(false);
     }
   };
@@ -68,137 +89,123 @@ const OCRFormReader = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Handle form submission
     console.log('Form submitted:', formData);
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Camera className="w-6 h-6" />
-            OCR Form Reader
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Upload Section */}
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-                id="image-upload"
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Paper elevation={3} sx={{ p: 4 }}>
+        <Typography variant="h4" gutterBottom>
+          OCR Form Reader
+        </Typography>
+
+        <Stack spacing={3}>
+          <Box sx={{ border: '2px dashed #ccc', borderRadius: 2, p: 3, textAlign: 'center' }}>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              style={{ display: 'none' }}
+              id="image-upload"
+            />
+            <label htmlFor="image-upload">
+              <Button variant="contained" component="span" startIcon={<CloudUploadIcon />}>
+                Upload Form
+              </Button>
+            </label>
+          </Box>
+
+          {imageUrl && (
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                Form Preview
+              </Typography>
+              <img
+                src={imageUrl}
+                alt="Form Preview"
+                style={{ maxWidth: '100%', height: 'auto', borderRadius: 8 }}
               />
-              <label
-                htmlFor="image-upload"
-                className="flex flex-col items-center cursor-pointer"
-              >
-                <Upload className="w-12 h-12 text-gray-400" />
-                <span className="mt-2 text-sm text-gray-600">
-                  Upload scanned form
-                </span>
-              </label>
-            </div>
+            </Box>
+          )}
 
-            {/* Preview */}
-            {imageUrl && (
-              <div className="mt-4">
-                <h3 className="text-lg font-semibold mb-2">Form Preview</h3>
-                <img
-                  src={imageUrl}
-                  alt="Form Preview"
-                  className="max-w-full h-auto rounded-lg"
-                />
-              </div>
-            )}
+          {isProcessing && (
+            <Box sx={{ textAlign: 'center' }}>
+              <CircularProgress />
+              <Typography sx={{ mt: 1 }}>
+                Processing form...
+              </Typography>
+            </Box>
+          )}
 
-            {/* Processing Status */}
-            {isProcessing && (
-              <div className="text-center py-4">
-                <div className="animate-pulse">Processing form...</div>
-              </div>
-            )}
+          {error && (
+            <Alert severity="error">
+              {error}
+            </Alert>
+          )}
 
-            {/* Error Message */}
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+          <form onSubmit={handleSubmit}>
+            <Stack spacing={2}>
+              <TextField
+                label="Name"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                fullWidth
+              />
 
-            {/* Editable Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
+              <TextField
+                label="Email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                fullWidth
+              />
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
+              <TextField
+                label="Phone"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+                fullWidth
+              />
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Phone</label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
+              <TextField
+                label="Address"
+                name="address"
+                value={formData.address}
+                onChange={handleInputChange}
+                fullWidth
+                multiline
+                rows={2}
+              />
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Address</label>
-                <input
-                  type="text"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleInputChange}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
+              <TextField
+                label="Date of Birth"
+                name="dateOfBirth"
+                type="date"
+                value={formData.dateOfBirth}
+                onChange={handleInputChange}
+                fullWidth
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Date of Birth</label>
-                <input
-                  type="date"
-                  name="dateOfBirth"
-                  value={formData.dateOfBirth}
-                  onChange={handleInputChange}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-
-              <button
+              <Button
                 type="submit"
-                className="w-full bg-blue-500 text-white p-2 rounded flex items-center justify-center gap-2"
+                variant="contained"
                 disabled={isProcessing}
+                startIcon={<SaveIcon />}
+                fullWidth
               >
-                <Save className="w-4 h-4" />
                 Save Form Data
-              </button>
-            </form>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+              </Button>
+            </Stack>
+          </form>
+        </Stack>
+      </Paper>
+    </Container>
   );
 };
 
