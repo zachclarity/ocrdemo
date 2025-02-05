@@ -1,16 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, ChangeEvent, FormEvent } from 'react';
 import {
   Container, Paper, Typography, TextField, Button, Box, Alert, CircularProgress, Stack
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import SaveIcon from '@mui/icons-material/Save';
-import { createWorker } from 'tesseract.js';
+import Tesseract from 'tesseract.js';
 
-const OCRFormReader = () => {
-  const [imageUrl, setImageUrl] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState('');
-  const [formData, setFormData] = useState({
+interface FormData {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  dateOfBirth: string;
+}
+
+const OCRFormReader: React.FC = () => {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [formData, setFormData] = useState<FormData>({
     name: '',
     email: '',
     phone: '',
@@ -18,8 +26,8 @@ const OCRFormReader = () => {
     dateOfBirth: ''
   });
 
-  const extractFields = (text) => {
-    const fields = {
+  const extractFields = (text: string): FormData => {
+    const fields: FormData = {
       name: text.match(/name[:\s]+([^\n]+)/i)?.[1]?.trim() || '',
       email: text.match(/email[:\s]+([^\n]+)/i)?.[1]?.trim() || '',
       phone: text.match(/phone[:\s]+([^\n]+)/i)?.[1]?.trim() || '',
@@ -27,7 +35,6 @@ const OCRFormReader = () => {
       dateOfBirth: text.match(/date of birth[:\s]+([^\n]+)/i)?.[1]?.trim() || ''
     };
 
-    // Clean extracted data
     if (fields.email) {
       fields.email = fields.email.toLowerCase().replace(/\s/g, '');
     }
@@ -44,42 +51,43 @@ const OCRFormReader = () => {
     return fields;
   };
 
-  const handleImageUpload = (event) => {
-    const file = event.target.files[0];
+  const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setImageUrl(e.target.result);
-        performOCR(e.target.result);
+      reader.onload = (e: ProgressEvent<FileReader>) => {
+        const result = e.target?.result as string;
+        setImageUrl(result);
+        performOCR(result);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const performOCR = async (imageData) => {
+  const performOCR = async (imageData: string) => {
     setIsProcessing(true);
     setError('');
-    const worker = await createWorker();
 
     try {
+      const worker = await Tesseract.createWorker();
       await worker.loadLanguage('eng');
       await worker.initialize('eng');
       
       const { data: { text } } = await worker.recognize(imageData);
-      console.log('Extracted text:', text); // For debugging
+      console.log('Extracted text:', text);
       
       const extractedData = extractFields(text);
       setFormData(extractedData);
-    } catch (err) {
-      setError('Error processing form: ' + err.message);
-      console.error('OCR Error:', err);
-    } finally {
+      
       await worker.terminate();
+    } catch (err) {
+      setError('Error processing form: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -87,7 +95,7 @@ const OCRFormReader = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     console.log('Form submitted:', formData);
   };
